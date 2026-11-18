@@ -178,7 +178,7 @@ td.num { font-family: var(--mono); font-size: 14px; white-space: nowrap; }
 .agechip.old { color: var(--phos); border-color: var(--phos-dim); }
 .vcell { min-width: 168px; }
 .vnum { color: #eafff3; font-size: 15px; }
-.vbar { height: 5px; margin-top: 5px; border-radius: 3px; background: #0c1a16; overflow: hidden; }
+.vbar { display: block; height: 5px; margin-top: 5px; border-radius: 3px; background: #0c1a16; overflow: hidden; }
 .vbar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--phos-dim), var(--phos) 70%, var(--amber)); box-shadow: 0 0 8px rgba(67,255,163,.35); }
 .empty { padding: 34px; text-align: center; color: var(--muted); font-family: var(--mono); }
 

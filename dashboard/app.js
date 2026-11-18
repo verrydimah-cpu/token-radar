@@ -235,6 +235,9 @@
     }
   }
   window.addEventListener('hashchange', route);
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && !detailView.hidden) location.hash = '';
+  });
 
   renderBoard();
   route();
