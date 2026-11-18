@@ -3,12 +3,111 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Token Radar: pre-token protocols ranked by implied value</title>
+<title>Token Radar — pre-token protocols ranked by implied value</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<a class="skip" href="#board">Skip to the board</a>
-<main id="board" tabindex="-1" aria-busy="true"></main>
+<a class="skip" href="#board-title">Skip to the board</a>
+
+<header class="masthead">
+  <div class="scope" aria-hidden="true">
+    <span class="sweep"></span>
+    <span class="ring r1"></span><span class="ring r2"></span><span class="ring r3"></span>
+    <span class="blip b1"></span><span class="blip b2"></span><span class="blip b3"></span>
+    <span class="cross-x"></span><span class="cross-y"></span>
+  </div>
+  <div class="mast-text">
+    <p class="kicker">MAKE.FUN BOUNTY · TOKEN LAUNCH RADAR · MODEL <span id="mver">radar-2</span></p>
+    <h1>TOKEN RADAR</h1>
+    <p class="sub">Protocols that record no token yet, ranked by what a token would be worth
+    if their record stayed as it is — and how to farm each one before it matters.</p>
+  </div>
+  <dl class="mast-stats">
+    <div><dt>Snapshot</dt><dd id="st-asof">—</dd></div>
+    <div><dt>Scanned</dt><dd id="st-scanned">—</dd></div>
+    <div><dt>On the board</dt><dd id="st-board">—</dd></div>
+    <div><dt>Watchlist</dt><dd id="st-watch">—</dd></div>
+  </dl>
+</header>
+
+<section class="method" aria-label="How the model works">
+  <p class="method-formula"><span class="mf-a">implied value</span> = TVL × <span class="mf-b">category mcap/TVL</span> × <span class="mf-c">7d momentum</span> × <span class="mf-d">tokenless age</span> × <span class="mf-e">chain breadth</span></p>
+  <p class="method-note">The ratio is the median of what the market already pays per dollar of TVL for traded protocols in the
+  same category, shrunk toward the global median when a category has fewer than three traded comparables. Momentum reads the
+  seven-day TVL change clamped to ±30%, at half weight; age pays 2% a year run with no token, capped at five years; breadth pays
+  1% per extra chain, capped at six. Wrapped, staked, bridged and exchange products and versioned duplicates are set aside —
+  every watchlist protocol appears regardless. An implied value is this board's claim, not a prediction that a token is issued.</p>
+  <details class="ratios">
+    <summary>Category ratios the board used</summary>
+    <div id="ratio-table"></div>
+  </details>
+</section>
+
+<main id="board-view">
+  <div class="controls" role="search">
+    <label class="ctl grow">Search
+      <input id="q" type="search" placeholder="Protocol name or slug…" autocomplete="off">
+    </label>
+    <label class="ctl">Category
+      <select id="cat"><option value="">All categories</option></select>
+    </label>
+    <label class="ctl">Chain
+      <select id="chain"><option value="">All chains</option></select>
+    </label>
+    <label class="ctl">Sort
+      <select id="sort">
+        <option value="rank">Rank</option>
+        <option value="value">Implied value</option>
+        <option value="tvl">TVL</option>
+        <option value="growth">7d growth</option>
+        <option value="age">Tokenless age</option>
+      </select>
+    </label>
+    <label class="ctl range">Min TVL <span id="mintvl-val">$5M</span>
+      <input id="mintvl" type="range" min="6.7" max="10.2" step="0.01" value="6.7">
+    </label>
+    <label class="ctl check">
+      <input id="watchonly" type="checkbox"> Watchlist only
+    </label>
+  </div>
+
+  <p class="count" id="count" aria-live="polite"></p>
+
+  <div class="table-wrap">
+    <table class="board">
+      <caption id="board-title">The board — pre-token protocols ranked by implied value</caption>
+      <thead>
+        <tr>
+          <th data-sort="rank" class="num">Rank</th>
+          <th>Protocol</th>
+          <th>Category</th>
+          <th>Chains</th>
+          <th data-sort="tvl" class="num">TVL</th>
+          <th data-sort="growth" class="num">7d</th>
+          <th data-sort="age" class="num">Age</th>
+          <th data-sort="value" class="num">Implied value</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <section class="live" aria-label="Protocols that already have a token">
+    <h2>Already trading — kept off the board</h2>
+    <p class="live-note">These protocols record a token, so the market has already priced them. They are the comparables
+    behind the board's ratios, never ranked rows. Largest by market cap:</p>
+    <div id="live-chips" class="live-chips"></div>
+  </section>
+</main>
+
+<section id="detail-view" hidden></section>
+
+<footer class="foot">
+  <p>Source: <span id="ft-source">the sealed snapshot</span>. Every figure on this page is computed from that snapshot by the
+  model above; nothing is fetched and nothing is live. Farm plans are starting points written from each protocol's own
+  record — read the protocol's own pages before putting money in.</p>
+</footer>
+
 <script src="../data.js"></script>
 <script src="app.js"></script>
 </body>
