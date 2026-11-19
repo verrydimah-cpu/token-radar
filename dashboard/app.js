@@ -164,6 +164,32 @@
     if (card) location.hash = 'p/' + card.getAttribute('data-slug');
   });
 
+  // ---------- the territory: the board summarised by category ----------
+  // Rows per category, the ratio the board used for it, and its share of board TVL — the eight
+  // heaviest categories named, the long tail aggregated honestly into one last chip.
+  var catAgg = {};
+  rows.forEach(function (r) {
+    var c = r.category || 'Uncategorised';
+    if (!catAgg[c]) catAgg[c] = { n: 0, tvl: 0 };
+    catAgg[c].n++; catAgg[c].tvl += r.tvl_usd;
+  });
+  var catList = Object.keys(catAgg).map(function (c) {
+    var cr = catRow({ category: c });
+    return { name: c, n: catAgg[c].n, tvl: catAgg[c].tvl, used: cr ? cr.used : R.ratios.global };
+  }).sort(function (a, b) { return b.tvl - a.tvl || b.n - a.n; });
+  var topCats = catList.slice(0, 8);
+  var restCats = catList.slice(8);
+  var restRows = restCats.reduce(function (s, c) { return s + c.n; }, 0);
+  var restShare = restCats.reduce(function (s, c) { return s + c.tvl; }, 0) / boardTvl * 100;
+  document.getElementById('cats').innerHTML =
+    '<p class="cats-k">The territory — the board by category <span>rows · ratio used · share of board TVL</span></p>' +
+    '<div class="catchips">' + topCats.map(function (c) {
+      return '<span class="catchip"><b>' + esc(c.name) + '</b> ' + c.n + ' · ×' + c.used.toFixed(3) +
+        ' · ' + (c.tvl / boardTvl * 100).toFixed(0) + '%</span>';
+    }).join('') +
+    '<span class="catchip rest">+ ' + restCats.length + ' more · ' + restRows + ' rows · ' +
+    restShare.toFixed(0) + '%</span></div>';
+
   // ---------- filters ----------
   var state = { q: '', cat: '', chain: '', minTvl: 5000000, sort: 'rank', watch: false };
   var catSel = document.getElementById('cat');
@@ -238,6 +264,7 @@
         '<td class="num">' + fmtPct(r.change_7d) + '</td>' +
         '<td class="num">' + fmtAge(r.age_years) + '</td>' +
         '<td class="num vcell"><span class="vnum">' + fmtUsd(r.implied_value_usd) + '</span>' +
+        '<span class="vconf vc-' + r.confidence + '"><i></i>' + r.confidence + ' base</span>' +
         '<span class="vbar"><i style="width:' + pct.toFixed(1) + '%"></i></span></td></tr>';
     }).join('');
   }
@@ -279,6 +306,15 @@
     var afterAge = afterMom * r.age_factor;
     var afterChains = afterAge * r.chain_factor;
     var listedLine = r.listed_at ? 'tracked since ' + r.listed_at : 'no listing date in the snapshot';
+    // The radar fix: this protocol read as a scope contact — bearing sweeps its rank around the
+    // dial (rank 1 dead ahead), range is its value against the board median, signal its comp base.
+    var brg = Math.round(360 * (r.rank - 1) / rows.length);
+    var rng = r.implied_value_usd / medianValue;
+    var rngText = rng >= 10 ? '×' + Math.round(rng) : rng >= 1 ? '×' + rng.toFixed(1) : '×' + rng.toFixed(2);
+    var fix = '<div class="fix"><span class="fix-k">Radar fix</span>' +
+      '<span class="fix-i"><i>BRG</i><b>' + ('00' + brg).slice(-3) + '°</b><em>rank ' + r.rank + ' of ' + rows.length + '</em></span>' +
+      '<span class="fix-i"><i>RNG</i><b>' + rngText + '</b><em>the board median · ' + fmtUsd(medianValue) + '</em></span>' +
+      '<span class="fix-i"><i>SIG</i><b class="vc-' + r.confidence + '">' + r.confidence.toUpperCase() + '</b><em>comp base · ' + basisShort(r) + '</em></span></div>';
     // The five factors as bars: the TVL base fills its track; each multiplier is drawn on a log
     // scale around the ×1 centre line, so a doubling and a halving take the same ink.
     function fbar(label, cls, valText, factor) {
@@ -308,6 +344,7 @@
       '<div><h2 class="d-name">' + esc(r.name) + '</h2>' +
       '<p class="d-sub">' + esc(r.slug) + ' · ' + esc(r.category || 'Uncategorised') + ' · ' + listedLine + '</p></div>' +
       '<span class="stamp">' + (r.watchlist ? 'Watchlist · Rank ' + r.rank : 'Radar find · Rank ' + r.rank) + '</span></div>' +
+      fix +
 
       '<dl class="stat-grid">' +
       '<div class="stat"><dt>Implied value</dt><dd>' + fmtUsd(r.implied_value_usd) + '<small>' + fmtFull(r.implied_value_usd) + '</small></dd></div>' +
