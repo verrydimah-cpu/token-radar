@@ -54,6 +54,9 @@
   function confLabel(c) {
     return c === 'strong' ? 'Strong comp base' : c === 'moderate' ? 'Moderate comp base' : 'Thin comp base';
   }
+  function effortLabel(e) {
+    return e === 'light' ? 'Light effort' : e === 'moderate' ? 'Moderate effort' : 'Intensive effort';
+  }
   function compPanel(r) {
     var c = catRow(r);
     var g = R.ratios;
@@ -97,6 +100,40 @@
   rt += '<tr><td>All traded protocols</td><td class="n">' + R.ratios.global_comps + '</td><td class="n">' + R.ratios.global.toFixed(3) +
     '</td><td class="n">' + R.ratios.global.toFixed(3) + '</td><td>global</td></tr></tbody></table>';
   document.getElementById('ratio-table').innerHTML = rt;
+
+  // ---------- worked example: the top row's arithmetic, end to end, from its own figures ----------
+  var top = rows[0];
+  if (top) {
+    var tc = catRow(top);
+    var ratioWhy;
+    if (top.ratio_basis === 'shrunk' && tc) {
+      ratioWhy = esc(top.category) + ' median ' + tc.median.toFixed(3) + ', shrunk toward the global ' + R.ratios.global.toFixed(3) +
+        ' — ' + tc.comps + ' traded comparable' + (tc.comps === 1 ? '' : 's') + ': ' + esc(tc.names.join(', '));
+    } else if (top.ratio_basis === 'category' && tc) {
+      ratioWhy = esc(top.category) + ' median across ' + tc.comps + ' traded comparables — largest: ' + esc(tc.names.join(', '));
+    } else {
+      ratioWhy = 'the global median across ' + R.ratios.global_comps + ' traded protocols — no traded comparable in its category';
+    }
+    var wseg = function (value, caption, cls) {
+      return '<span class="wseg' + (cls ? ' ' + cls : '') + '"><b>' + value + '</b><i>' + caption + '</i></span>';
+    };
+    document.getElementById('worked').innerHTML =
+      '<p class="worked-k">Worked example — #' + top.rank + ' ' + esc(top.name) + ', end to end</p>' +
+      '<div class="worked-chain">' +
+      wseg(fmtFull(top.tvl_usd), 'TVL, the snapshot\u2019s figure') +
+      '<span class="wop">×</span>' +
+      wseg(top.ratio.toFixed(3), ratioWhy) +
+      '<span class="wop">×</span>' +
+      wseg(top.momentum_factor.toFixed(3), '7d momentum — ' + (top.change_7d === null ? 'unreported, read as 0' : top.change_7d.toFixed(1) + '% at half weight')) +
+      '<span class="wop">×</span>' +
+      wseg(top.age_factor.toFixed(3), 'tokenless age — ' + (top.age_years === null ? 'no listing date, no bonus' : top.age_years.toFixed(2) + ' years at 2% a year')) +
+      '<span class="wop">×</span>' +
+      wseg(top.chain_factor.toFixed(3), 'chain breadth — ' + top.chains.length + ' chain' + (top.chains.length === 1 ? '' : 's') + ' at 1% per extra chain') +
+      '<span class="wop">=</span>' +
+      wseg(fmtFull(top.implied_value_usd), 'implied value, rank #' + top.rank, 'wres') +
+      '</div>' +
+      '<p class="worked-note">Factors printed to three places; the board\u2019s figure is computed at full precision. Open any row for the same walk, line by line, with its comparable set named and its factors drawn.</p>';
+  }
 
   document.getElementById('live-chips').innerHTML = R.live.map(function (p) {
     return '<span class="lchip"><b>' + esc(p.name) + '</b> · ' + fmtUsd(p.mcap_usd) + '</span>';
@@ -242,6 +279,29 @@
     var afterAge = afterMom * r.age_factor;
     var afterChains = afterAge * r.chain_factor;
     var listedLine = r.listed_at ? 'tracked since ' + r.listed_at : 'no listing date in the snapshot';
+    // The five factors as bars: the TVL base fills its track; each multiplier is drawn on a log
+    // scale around the ×1 centre line, so a doubling and a halving take the same ink.
+    function fbar(label, cls, valText, factor) {
+      var fill;
+      if (factor === null) {
+        fill = '<i class="fb-full ' + cls + '"></i>';
+      } else {
+        var dev = Math.max(-1, Math.min(1, Math.log(factor) / Math.LN2));
+        var w = Math.max(0.8, Math.abs(dev) * 47);
+        var left = dev >= 0 ? 50 : 50 - w;
+        fill = '<i class="' + cls + '" style="left:' + left.toFixed(1) + '%;width:' + w.toFixed(1) + '%"></i>';
+      }
+      return '<div class="fbar"><span class="fb-label">' + label + '</span>' +
+        '<span class="fb-track">' + fill + '<em class="fb-zero"></em></span>' +
+        '<span class="fb-val">' + valText + '</span></div>';
+    }
+    var fbars = '<div class="fbars"><p class="fb-cap">The five factors, drawn — log-scaled around the ×1 centre line: left shrinks the value, right grows it, a full half-track is a doubling or a halving.</p>' +
+      fbar('TVL base', 'fb-tvl', fmtFull(r.tvl_usd), null) +
+      fbar('Category ratio', 'fb-ratio', '×' + r.ratio.toFixed(3), r.ratio) +
+      fbar('7d momentum', 'fb-mom', '×' + r.momentum_factor.toFixed(3), r.momentum_factor) +
+      fbar('Tokenless age', 'fb-age', '×' + r.age_factor.toFixed(3), r.age_factor) +
+      fbar('Chain breadth', 'fb-chain', '×' + r.chain_factor.toFixed(3), r.chain_factor) +
+      '</div>';
     var html = '<article class="dossier">' +
       '<button class="back" id="back-btn" type="button">← Back to the board</button>' +
       '<div class="d-head"><span class="rk' + rkClass(r.rank) + '">' + r.rank + '</span>' +
@@ -257,6 +317,7 @@
       '<div class="stat"><dt>Tokenless age</dt><dd>' + (r.age_years === null ? 'n/a' : r.age_years.toFixed(2) + 'y') + '<small>age factor ×' + r.age_factor.toFixed(3) + '</small></dd></div>' +
       '<div class="stat"><dt>Chains</dt><dd>' + r.chains.length + '<small>breadth factor ×' + r.chain_factor.toFixed(3) + '</small></dd></div>' +
       '</dl>' +
+      fbars +
 
       '<h3>Why this value — the model, line by line</h3>' +
       '<table class="breakdown">' +
@@ -270,9 +331,9 @@
       compPanel(r) +
       '<p class="progress">Chains: ' + (r.chains.length ? esc(r.chains.join(', ')) : 'none recorded') + '</p>' +
 
-      '<h3>Farm plan — ' + r.farm_steps.length + ' steps</h3>' +
+      '<h3>Farm plan — ' + r.farm_steps.length + ' steps <span class="effort effort-' + r.plan.effort + '">' + effortLabel(r.plan.effort) + '</span></h3>' +
       '<p class="plan-summary">Plan at a glance — <b>≈ ' + fmtFull(r.plan.capital_usd) + '</b> of capital deployed · ' +
-      '<b>≈ $' + r.plan.fees_lo + '–$' + r.plan.fees_hi + '</b> in gas and fees · runs about <b>' + r.plan.weeks + ' weeks</b></p>' +
+      '<b>≈ $' + r.plan.fees_lo + '–$' + r.plan.fees_hi + '</b> in gas and fees · runs about <b>' + r.plan.weeks + ' weeks</b> · effort: <b>' + r.plan.effort + '</b>, graded from the plan\u2019s own steps, capital and weeks</p>' +
       '<p class="progress" id="plan-progress"><b>0</b> of ' + r.farm_steps.length + ' steps done</p>' +
       '<ol class="plan">' + r.farm_steps.map(function (s, i) {
         return '<li><input type="checkbox" data-step="' + i + '" aria-label="Step ' + (i + 1) + ' done">' +

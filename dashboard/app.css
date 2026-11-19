@@ -104,6 +104,23 @@ h1 {
 .method-formula { margin: 0; font-family: var(--mono); font-size: 14.5px; color: var(--txt); overflow-x: auto; white-space: nowrap; padding-bottom: 2px; }
 .mf-a { color: var(--phos); } .mf-b { color: #8be0ff; } .mf-c { color: var(--amber); } .mf-d { color: #d3a6ff; } .mf-e { color: #7dffce; }
 .method-note { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; max-width: 110ch; }
+
+/* ---------- worked example: one row's arithmetic, end to end ---------- */
+
+.worked { margin-top: 13px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.worked:empty { display: none; }
+.worked-k { margin: 0 0 9px; font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); }
+.worked-chain { display: flex; flex-wrap: wrap; align-items: stretch; gap: 7px; }
+.wseg {
+  display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  padding: 6px 11px; border-radius: 8px; background: var(--ink-2); border: 1px solid var(--line-soft);
+}
+.wseg b { font-family: var(--mono); font-size: 15.5px; font-weight: 600; color: var(--txt); white-space: nowrap; }
+.wseg i { font-style: normal; font-size: 11px; line-height: 1.35; color: var(--muted); max-width: 36ch; }
+.wseg.wres { border-color: var(--phos-dim); background: rgba(67,255,163,.06); }
+.wseg.wres b { color: var(--phos); }
+.wop { align-self: center; font-family: var(--mono); font-size: 15px; color: var(--faint); }
+.worked-note { margin: 8px 0 0; font-size: 12.5px; color: var(--faint); max-width: 110ch; }
 .ratios { margin-top: 10px; }
 .ratios summary { cursor: pointer; font-family: var(--mono); font-size: 12.5px; letter-spacing: .08em; color: var(--phos); }
 .ratios table { border-collapse: collapse; margin-top: 10px; font-size: 12.5px; }
@@ -262,6 +279,24 @@ td.num { font-family: var(--mono); font-size: 14px; white-space: nowrap; }
 .breakdown tr.total td { border-bottom: none; border-top: 2px solid var(--phos-dim); color: var(--phos); font-size: 16px; padding-top: 11px; }
 .breakdown tr.total td.n { color: var(--phos); text-shadow: 0 0 12px rgba(67,255,163,.4); }
 
+/* ---------- the five factors, drawn ---------- */
+
+.fbars { margin-top: 18px; padding: 12px 16px 13px; background: var(--ink-2); border: 1px solid var(--line-soft); border-radius: 10px; }
+.fb-cap { margin: 0 0 10px; font-size: 12.5px; color: var(--faint); max-width: 105ch; }
+.fbar { display: flex; align-items: center; gap: 12px; padding: 3.5px 0; }
+.fb-label { flex: 0 0 118px; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.fb-track { position: relative; flex: 1 1 auto; height: 13px; border-radius: 4px; background: #0c1a16; overflow: hidden; }
+.fb-track i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.fb-track .fb-full { left: 0; width: 100%; }
+.fb-track .fb-zero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(217,232,222,.4); }
+.fb-tvl { background: linear-gradient(90deg, var(--phos-dim), rgba(67,255,163,.55)); }
+.fb-ratio { background: #8be0ff; box-shadow: 0 0 7px rgba(139,224,255,.45); }
+.fb-mom { background: var(--amber); box-shadow: 0 0 7px rgba(255,182,72,.45); }
+.fb-age { background: #d3a6ff; box-shadow: 0 0 7px rgba(211,166,255,.45); }
+.fb-chain { background: #7dffce; box-shadow: 0 0 7px rgba(125,255,206,.45); }
+.fb-val { flex: 0 0 118px; font-family: var(--mono); font-size: 13px; color: var(--txt); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 760px) { .fb-label { flex-basis: 92px; } .fb-val { flex-basis: 96px; } }
+
 /* ---------- the comparable set, shown ---------- */
 
 .comp-panel { margin-top: 16px; padding: 13px 16px 14px; background: var(--ink-2); border: 1px solid var(--line-soft); border-radius: 10px; }
@@ -283,6 +318,15 @@ td.num { font-family: var(--mono); font-size: 14px; white-space: nowrap; }
   font-family: var(--mono); font-size: 13px; color: var(--muted);
 }
 .plan-summary b { color: var(--amber); font-weight: 600; }
+
+.effort {
+  display: inline-block; margin-left: 10px; padding: 2px 9px; vertical-align: 2px;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+  border-radius: 20px; border: 1px solid var(--line);
+}
+.effort-light { color: var(--phos); border-color: var(--phos-dim); background: rgba(67,255,163,.07); }
+.effort-moderate { color: #8be0ff; border-color: rgba(139,224,255,.4); background: rgba(139,224,255,.06); }
+.effort-intensive { color: var(--amber); border-color: rgba(255,182,72,.5); background: rgba(255,182,72,.06); }
 
 .plan { list-style: none; margin: 0; padding: 0; }
 .plan li { display: flex; gap: 12px; padding: 11px 12px; border: 1px solid var(--line-soft); border-radius: 10px; margin-bottom: 9px; background: var(--ink-2); }

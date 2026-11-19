@@ -7,7 +7,8 @@
 //   board.json    the ranked board: one row per protocol, with its farm plan
 //   data.js       the same board in the shape the dashboard renders
 //   dashboard/    this repository's dashboard, copied
-//   screenshots/  this repository's three screenshots, copied
+//   screenshots/  this repository's screenshots, copied (three or four: the board, a detail
+//                 view, a filtered view, and the method, worked end to end)
 //   dossier.json  the judge's summary, written last with buildDossier so the scorer's rebuild
 //                 of it from the same output matches byte for byte
 //
@@ -88,7 +89,7 @@ function copyTree(from: string, to: string): string[] {
 
 const pageFiles = copyTree(join(here, 'dashboard'), join(outputDir, 'dashboard'));
 const shots = copyTree(join(here, 'screenshots'), join(outputDir, 'screenshots'));
-if (shots.length < 3) fail(`screenshots/ holds ${shots.length} image(s): hand in 3 — the board, a detail view and a filtered view`);
+if (shots.length < 3) fail(`screenshots/ holds ${shots.length} image(s): hand in 3 or 4 — the board, a detail view, a filtered view and, if a fourth, the method view`);
 for (const name of shots) {
   if (!IMAGE_NAME.test(name)) fail(`screenshots/${name}: a name is letters, digits and . _ -, 1 to 128 characters`);
 }
