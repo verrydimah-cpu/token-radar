@@ -40,6 +40,41 @@
     if (r.ratio_basis === 'shrunk') return esc(r.category) + ' has ' + r.ratio_comps + ' traded comparable' + (r.ratio_comps === 1 ? '' : 's') + ' — its median shrunk toward the global ' + R.ratios.global.toFixed(3);
     return 'no traded comparable in its category — the global median of ' + R.ratios.global_comps + ' traded protocols';
   }
+  function catRow(r) {
+    for (var i = 0; i < R.ratios.categories.length; i++) {
+      if (R.ratios.categories[i].category === r.category) return R.ratios.categories[i];
+    }
+    return null;
+  }
+  function confLabel(c) {
+    return c === 'strong' ? 'Strong comp base' : c === 'moderate' ? 'Moderate comp base' : 'Thin comp base';
+  }
+  function compPanel(r) {
+    var c = catRow(r);
+    var g = R.ratios;
+    var line, note;
+    if (r.ratio_basis === 'global' || !c) {
+      line = 'No traded protocol in ' + (r.category ? esc(r.category) : 'its category') + ' to compare against.';
+      note = 'Valued on the global median ' + g.global.toFixed(3) + '× across ' + g.global_comps +
+        ' traded protocols — the largest include ' + esc(g.global_names.join(', ')) + '.';
+    } else if (r.ratio_basis === 'shrunk') {
+      line = esc(r.category) + ' has only ' + c.comps + ' traded comparable' + (c.comps === 1 ? '' : 's') +
+        ' — ' + esc(c.names.join(', ')) + ' — too few to trust on their own.';
+      note = 'Their median ' + c.median.toFixed(3) + '× is shrunk toward the global median ' + g.global.toFixed(3) +
+        '× (' + g.global_comps + ' traded protocols), giving the ' + c.used.toFixed(3) + '× used above.';
+    } else {
+      line = 'The ' + esc(r.category) + ' ratio rests on ' + c.comps + ' traded comparables — largest: ' +
+        esc(c.names.join(', ')) + '.';
+      note = 'Category median ' + c.median.toFixed(3) + '×, used as it stands; the global median across ' +
+        g.global_comps + ' traded protocols is ' + g.global.toFixed(3) + '×.';
+    }
+    var verdict = r.confidence === 'strong' ? 'A deep traded set carries this ratio.'
+      : r.confidence === 'moderate' ? 'A workable base — read the value as a range, not a point.'
+      : 'A thin base — treat this value as the roughest kind of claim.';
+    return '<div class="comp-panel"><div class="comp-head"><h4>The comparable set behind this number</h4>' +
+      '<span class="conf conf-' + r.confidence + '">' + confLabel(r.confidence) + '</span></div>' +
+      '<p class="comp-line">' + line + '</p><p class="comp-note">' + note + ' ' + verdict + '</p></div>';
+  }
 
   // ---------- masthead, ratios, live strip ----------
   document.getElementById('mver').textContent = R.model_version;
@@ -61,6 +96,31 @@
   document.getElementById('live-chips').innerHTML = R.live.map(function (p) {
     return '<span class="lchip"><b>' + esc(p.name) + '</b> · ' + fmtUsd(p.mcap_usd) + '</span>';
   }).join('');
+
+  // ---------- highlights strip: board stats + top movers ----------
+  var byValue = rows.slice().sort(function (a, b) { return b.implied_value_usd - a.implied_value_usd; });
+  var mid = Math.floor(byValue.length / 2);
+  var medianValue = byValue.length % 2 === 1 ? byValue[mid].implied_value_usd
+    : (byValue[mid - 1].implied_value_usd + byValue[mid].implied_value_usd) / 2;
+  var boardTvl = rows.reduce(function (sum, r) { return sum + r.tvl_usd; }, 0);
+  document.getElementById('ss-median').textContent = fmtUsd(medianValue);
+  document.getElementById('ss-tvl').textContent = fmtUsd(boardTvl);
+  document.getElementById('ss-watch').textContent = R.stats.watchlist + ' of ' + R.stats.board_rows +
+    ' · ' + Math.round((R.stats.watchlist / R.stats.board_rows) * 100) + '%';
+  var movers = rows.filter(function (r) { return r.change_7d !== null; })
+    .sort(function (a, b) { return b.change_7d - a.change_7d || a.rank - b.rank; })
+    .slice(0, 5);
+  document.getElementById('movers').innerHTML = movers.map(function (r) {
+    return '<button type="button" class="mcard" data-slug="' + esc(r.slug) + '">' +
+      '<span class="rk' + rkClass(r.rank) + '">' + r.rank + '</span>' +
+      '<span class="m-main"><span class="m-name">' + esc(r.name) + '</span>' +
+      '<span class="m-sub">implied ' + fmtUsd(r.implied_value_usd) + ' · TVL ' + fmtUsd(r.tvl_usd) + '</span></span>' +
+      '<span class="m-pct">' + fmtPct(r.change_7d) + '</span></button>';
+  }).join('');
+  document.getElementById('movers').addEventListener('click', function (ev) {
+    var card = ev.target.closest('[data-slug]');
+    if (card) location.hash = 'p/' + card.getAttribute('data-slug');
+  });
 
   // ---------- filters ----------
   var state = { q: '', cat: '', chain: '', minTvl: 5000000, sort: 'rank', watch: false };
@@ -202,9 +262,12 @@
       '<tr><td>× chain breadth ' + r.chain_factor.toFixed(3) + '</td><td class="n">' + fmtFull(afterChains) + '</td><td class="why">' + r.chains.length + ' chain' + (r.chains.length === 1 ? '' : 's') + ' at 1% per extra chain, capped at six</td></tr>' +
       '<tr class="total"><td>Implied value</td><td class="n">' + fmtFull(r.implied_value_usd) + '</td><td class="why">factors above are rounded to 4 places; the board\u2019s figure uses full precision</td></tr>' +
       '</table>' +
+      compPanel(r) +
       '<p class="progress">Chains: ' + (r.chains.length ? esc(r.chains.join(', ')) : 'none recorded') + '</p>' +
 
       '<h3>Farm plan — ' + r.farm_steps.length + ' steps</h3>' +
+      '<p class="plan-summary">Plan at a glance — <b>≈ ' + fmtFull(r.plan.capital_usd) + '</b> of capital deployed · ' +
+      '<b>≈ $' + r.plan.fees_lo + '–$' + r.plan.fees_hi + '</b> in gas and fees · runs about <b>' + r.plan.weeks + ' weeks</b></p>' +
       '<p class="progress" id="plan-progress"><b>0</b> of ' + r.farm_steps.length + ' steps done</p>' +
       '<ol class="plan">' + r.farm_steps.map(function (s, i) {
         return '<li><input type="checkbox" data-step="' + i + '" aria-label="Step ' + (i + 1) + ' done">' +
