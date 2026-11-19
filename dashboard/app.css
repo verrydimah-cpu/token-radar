@@ -14,7 +14,7 @@
   --faint: #54665f;
   --phos: #43ffa3;
   --phos-dim: #1d7a4e;
-  --amber: #ffb648;
+  --amber: #ffae35;
   --gold: #ffd76a;
   --red: #ff7a6b;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -34,10 +34,10 @@ body {
   font-size: 15px;
   line-height: 1.5;
   background:
-    radial-gradient(560px 560px at 88% -120px, rgba(67, 255, 163, 0.07), transparent 62%),
-    radial-gradient(900px 500px at -10% 30%, rgba(255, 182, 72, 0.04), transparent 60%),
-    linear-gradient(rgba(67, 255, 163, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(67, 255, 163, 0.025) 1px, transparent 1px),
+    radial-gradient(560px 560px at 88% -120px, rgba(67, 255, 163, 0.10), transparent 62%),
+    radial-gradient(900px 500px at -10% 30%, rgba(255, 174, 53, 0.055), transparent 60%),
+    linear-gradient(rgba(67, 255, 163, 0.034) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(67, 255, 163, 0.034) 1px, transparent 1px),
     var(--ink);
   background-size: auto, auto, 44px 44px, 44px 44px, auto;
 }
@@ -45,7 +45,7 @@ body {
 .skip { position: absolute; left: -999px; top: 0; background: var(--phos); color: #04120a; padding: 8px 14px; font-family: var(--mono); }
 .skip:focus { left: 12px; top: 12px; z-index: 50; }
 
-::selection { background: rgba(67, 255, 163, 0.28); }
+::selection { background: rgba(67, 255, 163, 0.34); }
 
 /* ---------- masthead with scope ---------- */
 
@@ -63,7 +63,7 @@ body {
   width: 118px; height: 118px; border-radius: 50%;
   background: radial-gradient(circle, #0a2018 0%, #061511 58%, #04100c 100%);
   border: 1px solid var(--phos-dim);
-  box-shadow: inset 0 0 24px rgba(67,255,163,.18), 0 0 18px rgba(67,255,163,.12);
+  box-shadow: inset 0 0 26px rgba(67,255,163,.24), 0 0 20px rgba(67,255,163,.18);
   overflow: hidden;
 }
 .scope .ring { position: absolute; border: 1px solid rgba(67,255,163,.28); border-radius: 50%; }
@@ -73,12 +73,12 @@ body {
 .scope .cross-y { top: 0; bottom: 0; left: 50%; width: 1px; }
 .scope .sweep {
   position: absolute; inset: 0; border-radius: 50%;
-  background: conic-gradient(from 0deg, rgba(67,255,163,.55), rgba(67,255,163,.12) 52deg, transparent 78deg);
+  background: conic-gradient(from 0deg, rgba(67,255,163,.68), rgba(67,255,163,.16) 52deg, transparent 78deg);
   animation: sweep 7s linear infinite;
 }
 @keyframes sweep { to { transform: rotate(360deg); } }
-.scope .blip { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: var(--phos); box-shadow: 0 0 8px 2px rgba(67,255,163,.75); }
-.scope .b1 { left: 30%; top: 24%; } .scope .b2 { left: 68%; top: 56%; background: var(--amber); box-shadow: 0 0 8px 2px rgba(255,182,72,.75); }
+.scope .blip { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: var(--phos); box-shadow: 0 0 9px 2px rgba(67,255,163,.9); }
+.scope .b1 { left: 30%; top: 24%; } .scope .b2 { left: 68%; top: 56%; background: var(--amber); box-shadow: 0 0 9px 2px rgba(255,174,53,.9); }
 .scope .b3 { left: 44%; top: 74%; width: 4px; height: 4px; }
 
 .mast-text { flex: 1 1 auto; min-width: 260px; }
@@ -86,7 +86,7 @@ body {
 h1 {
   margin: 0; font-family: var(--mono); font-weight: 700;
   font-size: clamp(34px, 5vw, 45px); letter-spacing: .06em; line-height: 1.02;
-  color: #eafff3; text-shadow: 0 0 22px rgba(67,255,163,.45), 0 0 3px rgba(67,255,163,.6);
+  color: #eafff3; text-shadow: 0 0 26px rgba(67,255,163,.62), 0 0 4px rgba(67,255,163,.85);
 }
 .sub { margin: 6px 0 0; max-width: 62ch; color: var(--muted); font-size: 14.5px; }
 
@@ -251,7 +251,7 @@ td.num { font-family: var(--mono); font-size: 14px; white-space: nowrap; }
 }
 .vc-strong { color: var(--phos); } .vc-moderate { color: #8be0ff; } .vc-thin { color: var(--amber); }
 .vbar { display: block; height: 5px; margin-top: 5px; border-radius: 3px; background: #12241e; overflow: hidden; }
-.vbar i { display: block; height: 100%; min-width: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--phos-dim), var(--phos) 70%, var(--amber)); box-shadow: 0 0 8px rgba(67,255,163,.35); }
+.vbar i { display: block; height: 100%; min-width: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--phos-dim), var(--phos) 70%, var(--amber)); box-shadow: 0 0 9px rgba(67,255,163,.5); }
 .empty { padding: 34px; text-align: center; color: var(--muted); font-family: var(--mono); }
 
 /* ---------- live strip ---------- */
@@ -294,7 +294,7 @@ td.num { font-family: var(--mono); font-size: 14px; white-space: nowrap; }
   display: flex; flex-wrap: wrap; align-items: center; gap: 7px 22px;
   margin-top: 12px; padding: 8px 14px;
   background: var(--ink-2); border: 1px solid var(--phos-dim); border-radius: 10px;
-  box-shadow: inset 0 0 18px rgba(67,255,163,.05);
+  box-shadow: inset 0 0 18px rgba(67,255,163,.09);
   font-family: var(--mono);
 }
 .fix-k { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--amber); }
@@ -315,7 +315,7 @@ td.num { font-family: var(--mono); font-size: 14px; white-space: nowrap; }
 .breakdown td.n { text-align: right; color: var(--txt); white-space: nowrap; }
 .breakdown td.why { color: var(--faint); font-size: 12.5px; }
 .breakdown tr.total td { border-bottom: none; border-top: 2px solid var(--phos-dim); color: var(--phos); font-size: 16px; padding-top: 11px; }
-.breakdown tr.total td.n { color: var(--phos); text-shadow: 0 0 12px rgba(67,255,163,.4); }
+.breakdown tr.total td.n { color: var(--phos); text-shadow: 0 0 12px rgba(67,255,163,.55); }
 
 /* ---------- the five factors, drawn ---------- */
 
