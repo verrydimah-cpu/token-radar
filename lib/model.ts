@@ -14,6 +14,11 @@
 // The board's floor is the snapshot's watchlist: all 40 slugs appear, whatever the hygiene filter
 // below says about them. Below the floor, the radar adds every clean pre-token protocol at or
 // above $5,000,000 of TVL — the early rows the radar exists to find.
+//
+// Transparency is part of the model, not a garnish: every category ratio carries the names of
+// its largest comparables, every row carries a plain-language confidence grade for the set its
+// ratio rests on, and every farm plan carries its own totals — the capital its steps deploy,
+// the fees they burn, the weeks they run — summed from the same figures the steps state.
 
 /** The snapshot's protocol entry: exactly the ten fields the sealed input carries. */
 export interface SnapshotProtocol {
@@ -47,7 +52,7 @@ export class SnapshotError extends Error {
 }
 
 /** The model's version label: the dashboard names it, the board carries it. */
-export const MODEL_VERSION = 'radar-2';
+export const MODEL_VERSION = 'radar-3';
 
 /** Below this TVL a pre-token protocol is too small for the board to rank. */
 export const BOARD_FLOOR_USD = 5_000_000;
@@ -108,19 +113,22 @@ export function isPreToken(p: SnapshotProtocol): boolean {
 // Comparables: what the market already pays for a dollar of TVL, by category.
 // ---------------------------------------------------------------------------
 
-/** One category's comparable set: how many traded protocols, their median ratio, the ratio used. */
+/** One category's comparable set: how many traded protocols, their median ratio, the ratio used,
+ *  and the largest comparables by market cap, named so a reader can see what the number rests on. */
 export interface CategoryRatio {
   category: string;
   comps: number;
   median: number;
   used: number;
   basis: 'category' | 'shrunk' | 'global';
+  names: string[];
 }
 
 /** The whole comparable table: a global median plus one row per category. */
 export interface RatioTable {
   global: number;
   global_comps: number;
+  global_names: string[];
   categories: CategoryRatio[];
   byCategory: Map<string, CategoryRatio>;
 }
@@ -136,6 +144,18 @@ function clampRatio(r: number): number {
   return Math.min(RATIO_MAX, Math.max(RATIO_MIN, r));
 }
 
+/** How many comparable names a category row carries: enough to show the set, not the whole set. */
+const COMP_NAMES_SHOWN = 4;
+
+/** The largest comparables by market cap, named; market-cap ties break by name, so the list is a
+ *  pure function of the snapshot's bytes. */
+function topCompNames(comps: { name: string; mcap: number }[]): string[] {
+  return [...comps]
+    .sort((a, b) => b.mcap - a.mcap || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .slice(0, COMP_NAMES_SHOWN)
+    .map((c) => c.name);
+}
+
 /**
  * Build the comparable table from the snapshot's traded protocols. A protocol is a comparable
  * when it records a market cap and a TVL, both positive. Categories with at least COMPS_TO_TRUST
@@ -145,15 +165,21 @@ function clampRatio(r: number): number {
  */
 export function buildRatios(protocols: SnapshotProtocol[]): RatioTable {
   const all: number[] = [];
+  const allComps: { name: string; mcap: number }[] = [];
   const perCategory = new Map<string, number[]>();
+  const perCategoryComps = new Map<string, { name: string; mcap: number }[]>();
   for (const p of protocols) {
     if (p.mcap_usd === null || p.mcap_usd <= 0 || p.tvl_usd <= 0) continue;
     const r = clampRatio(p.mcap_usd / p.tvl_usd);
     all.push(r);
+    allComps.push({ name: p.name, mcap: p.mcap_usd });
     if (p.category !== null) {
       const list = perCategory.get(p.category);
       if (list === undefined) perCategory.set(p.category, [r]);
       else list.push(r);
+      const comps = perCategoryComps.get(p.category);
+      if (comps === undefined) perCategoryComps.set(p.category, [{ name: p.name, mcap: p.mcap_usd }]);
+      else comps.push({ name: p.name, mcap: p.mcap_usd });
     }
   }
   all.sort((a, b) => a - b);
@@ -173,12 +199,19 @@ export function buildRatios(protocols: SnapshotProtocol[]): RatioTable {
       used = (n * med + (COMPS_TO_TRUST - n) * global) / COMPS_TO_TRUST;
       basis = 'shrunk';
     }
-    const row: CategoryRatio = { category, comps: n, median: round4(med), used: round4(used), basis };
+    const row: CategoryRatio = {
+      category,
+      comps: n,
+      median: round4(med),
+      used: round4(used),
+      basis,
+      names: topCompNames(perCategoryComps.get(category) ?? []),
+    };
     categories.push(row);
     byCategory.set(category, row);
   }
   categories.sort((a, b) => (a.category < b.category ? -1 : 1));
-  return { global: round4(global), global_comps: all.length, categories, byCategory };
+  return { global: round4(global), global_comps: all.length, global_names: topCompNames(allComps), categories, byCategory };
 }
 
 /** The ratio one protocol is valued with, and where it came from. */
@@ -188,6 +221,18 @@ export function ratioFor(p: SnapshotProtocol, table: RatioTable): { ratio: numbe
     if (row !== undefined) return { ratio: row.used, basis: row.basis, comps: row.comps };
   }
   return { ratio: table.global, basis: 'global', comps: table.global_comps };
+}
+
+/** How much weight a row's comparable set can bear, in plain language for the detail view.
+ *  A category that speaks for itself with eight or more traded protocols is a strong base; a
+ *  handful of comparables, or the broad global median standing in for a silent category, is a
+ *  moderate one; a ratio shrunk out of one or two comparables is thin, and the page says so. */
+export type CompConfidence = 'strong' | 'moderate' | 'thin';
+
+export function confidenceFor(basis: CategoryRatio['basis'], comps: number): CompConfidence {
+  if (basis === 'shrunk') return 'thin';
+  if (basis === 'global') return 'moderate';
+  return comps >= 8 ? 'strong' : 'moderate';
 }
 
 // ---------------------------------------------------------------------------
@@ -356,77 +401,149 @@ function archetypeOf(p: SnapshotProtocol): Archetype {
   return 'generic';
 }
 
-/** The plan's core action: what the farmer actually does inside the protocol. */
-function coreStep(p: SnapshotProtocol, kind: Archetype, capital: number, chain: string, gas: number): string {
+/** The plan's core action: what the farmer actually does inside the protocol. Two phrasings per
+ *  archetype, chosen by the plan's seed, so rows in the same category do not read as one template
+ *  with the names swapped. Both phrasings carry the same facts: the capital, the chain, the gas. */
+function coreStep(p: SnapshotProtocol, kind: Archetype, capital: number, chain: string, gas: number, v: number): string {
   const n = p.name;
   const g = `$${gas.toFixed(gas < 1 ? 2 : 0)}`;
-  switch (kind) {
-    case 'lending':
-      return `Supply $${capital} of USDC to ${n} on ${chain} and borrow no more than 30% against it, so the position counts as both supply and borrow activity. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to open, then leave it open.`;
-    case 'dex':
-      return `Add $${capital} of liquidity to ${n}'s busiest pool on ${chain} (the USDC pair, if it lists one) and keep the LP position open rather than hopping pools. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to open.`;
-    case 'cdp':
-      return `Open a vault in ${n} on ${chain}: deposit $${capital} of collateral and mint its stablecoin at no more than half the maximum ratio, well clear of liquidation. Cost: the $${capital} plus about ${g} of gas. Time: 20 minutes to open and check the health factor.`;
-    case 'curator':
-      return `Allocate $${capital} to a ${n} curated vault on ${chain} — pick the vault with the longest track record, not the highest advertised yield. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes, most of it reading the vault's page.`;
-    case 'derivatives':
-      return `Post $${capital} of USDC as margin on ${n} (${chain}) and trade one small hedged position a week — size for activity, not for profit. Cost: the $${capital} plus about ${g} of gas per trade. Time: 20 minutes to set up, 5 minutes a trade.`;
-    case 'bridge':
-      return `Route $${capital} of transfers through ${n} between ${chain} and your main chain, in both directions, instead of using a different bridge each time. Cost: bridge fees near 0.1% plus about ${g} of gas a crossing. Time: 10 minutes a crossing.`;
-    case 'staking':
-      return `Stake $${capital} of the base asset through ${n} on ${chain} and hold the staking receipt in the same wallet. Cost: the $${capital} plus about ${g} of gas. Time: 10 minutes to stake.`;
-    case 'rwa':
-      return `Mint $${capital} of ${n}'s tokenised asset on ${chain} and hold it; if a secondary market is listed, buy there instead when the mint minimum is higher. Cost: the $${capital} plus about ${g} of gas. Time: 20 minutes including the eligibility check.`;
-    case 'launchpad':
-      return `Register the wallet on ${n} (${chain}) and take part in one launch with $${capital} at most — never chase an allocation past the amount you set. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to register, then the launch's own window.`;
-    case 'prediction':
-      return `Fund $${capital} on ${n} (${chain}) and hold one position in a liquid market until it settles; pick markets you can price, not headlines. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to fund and place.`;
-    case 'yield':
-      return `Deposit $${capital} into ${n}'s flagship vault on ${chain} and take the vault shares, not the auto-compound wrapper, when both are offered. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to deposit.`;
-    default:
-      return `Deposit $${capital} of USDC into ${n} on ${chain} through its own app and keep the position open; use the product a regular user would, not a test contract. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to open.`;
-  }
+  const variants: Record<Archetype, [string, string]> = {
+    lending: [
+      `Supply $${capital} of USDC to ${n} on ${chain} and borrow no more than 30% against it, so the position counts as both supply and borrow activity. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to open, then leave it open.`,
+      `Lend $${capital} of USDC into ${n} on ${chain}, then borrow against it at no more than 30% loan-to-value, so both sides of the market see the wallet. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to open, then leave it open.`,
+    ],
+    dex: [
+      `Add $${capital} of liquidity to ${n}'s busiest pool on ${chain} (the USDC pair, if it lists one) and keep the LP position open rather than hopping pools. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to open.`,
+      `Provide $${capital} across ${n}'s main USDC pool on ${chain} and leave the position to accrue fees instead of rotating it between pools. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to open.`,
+    ],
+    cdp: [
+      `Open a vault in ${n} on ${chain}: deposit $${capital} of collateral and mint its stablecoin at no more than half the maximum ratio, well clear of liquidation. Cost: the $${capital} plus about ${g} of gas. Time: 20 minutes to open and check the health factor.`,
+      `Lock $${capital} of collateral in a ${n} vault on ${chain} and draw its stablecoin to at most half the allowed ratio, keeping a wide liquidation buffer. Cost: the $${capital} plus about ${g} of gas. Time: 20 minutes to open and check the health factor.`,
+    ],
+    curator: [
+      `Allocate $${capital} to a ${n} curated vault on ${chain} — pick the vault with the longest track record, not the highest advertised yield. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes, most of it reading the vault's page.`,
+      `Place $${capital} with a ${n} curator vault on ${chain}; choose by months of track record and assets already entrusted, not by the headline APY. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes, most of it reading the vault's page.`,
+    ],
+    derivatives: [
+      `Post $${capital} of USDC as margin on ${n} (${chain}) and trade one small hedged position a week — size for activity, not for profit. Cost: the $${capital} plus about ${g} of gas per trade. Time: 20 minutes to set up, 5 minutes a trade.`,
+      `Fund a ${n} margin account on ${chain} with $${capital} of USDC and work one small hedged trade a week, sized for a track record rather than a win. Cost: the $${capital} plus about ${g} of gas per trade. Time: 20 minutes to set up, 5 minutes a trade.`,
+    ],
+    bridge: [
+      `Route $${capital} of transfers through ${n} between ${chain} and your main chain, in both directions, instead of using a different bridge each time. Cost: bridge fees near 0.1% plus about ${g} of gas a crossing. Time: 10 minutes a crossing.`,
+      `Move $${capital} of volume over ${n} between ${chain} and your main chain across the plan, both ways, rather than splitting crossings between bridges. Cost: bridge fees near 0.1% plus about ${g} of gas a crossing. Time: 10 minutes a crossing.`,
+    ],
+    staking: [
+      `Stake $${capital} of the base asset through ${n} on ${chain} and hold the staking receipt in the same wallet. Cost: the $${capital} plus about ${g} of gas. Time: 10 minutes to stake.`,
+      `Delegate $${capital} of the base asset via ${n} on ${chain} and keep the receipt token untouched in the same wallet. Cost: the $${capital} plus about ${g} of gas. Time: 10 minutes to stake.`,
+    ],
+    rwa: [
+      `Mint $${capital} of ${n}'s tokenised asset on ${chain} and hold it; if a secondary market is listed, buy there instead when the mint minimum is higher. Cost: the $${capital} plus about ${g} of gas. Time: 20 minutes including the eligibility check.`,
+      `Buy $${capital} of ${n}'s tokenised asset on ${chain} — at the mint if the minimum allows, otherwise on its listed secondary market — and hold it. Cost: the $${capital} plus about ${g} of gas. Time: 20 minutes including the eligibility check.`,
+    ],
+    launchpad: [
+      `Register the wallet on ${n} (${chain}) and take part in one launch with $${capital} at most — never chase an allocation past the amount you set. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to register, then the launch's own window.`,
+      `Put at most $${capital} into one ${n} launch on ${chain} from the registered wallet, and let any allocation past that cap go. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to register, then the launch's own window.`,
+    ],
+    prediction: [
+      `Fund $${capital} on ${n} (${chain}) and hold one position in a liquid market until it settles; pick markets you can price, not headlines. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to fund and place.`,
+      `Deposit $${capital} on ${n} (${chain}) and take one position in a deep, liquid market you can price yourself, held to settlement. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to fund and place.`,
+    ],
+    yield: [
+      `Deposit $${capital} into ${n}'s flagship vault on ${chain} and take the vault shares, not the auto-compound wrapper, when both are offered. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to deposit.`,
+      `Put $${capital} into ${n}'s flagship vault on ${chain}; where a plain share and an auto-compound wrapper are both offered, hold the plain share. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to deposit.`,
+    ],
+    generic: [
+      `Deposit $${capital} of USDC into ${n} on ${chain} through its own app and keep the position open; use the product a regular user would, not a test contract. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to open.`,
+      `Open a $${capital} USDC position in ${n} on ${chain} through its own app — the flow a regular user takes — and keep it open. Cost: the $${capital} plus about ${g} of gas. Time: 15 minutes to open.`,
+    ],
+  };
+  return variants[kind][v]!;
 }
 
-/** The plan's second mechanic: the follow-through that separates a farmer from a one-off visitor. */
-function secondStep(p: SnapshotProtocol, kind: Archetype, capital: number, chain: string): string {
+/** The plan's second mechanic: the follow-through that separates a farmer from a one-off visitor.
+ *  Two phrasings per archetype, like the core step, chosen by the plan's seed. */
+function secondStep(p: SnapshotProtocol, kind: Archetype, capital: number, chain: string, v: number): string {
   const n = p.name;
   const small = Math.max(10, Math.round(capital / 4 / 5) * 5);
-  switch (kind) {
-    case 'lending':
-      return `Run one careful loop a week: borrow $${small} of a stablecoin against the supply, resupply it once, and unwind it the same day if rates spike. Cost: about $2 of gas a loop. Time: 10 minutes a week.`;
-    case 'dex':
-      return `Stake the LP position in ${n}'s own farm or gauge on ${chain} when it offers one, and claim rewards weekly rather than letting them idle. Cost: about $1 of gas a claim. Time: 5 minutes a week.`;
-    case 'cdp':
-      return `Top the vault up by $${small} whenever its health factor drifts toward your limit, and repay a slice after large price moves. Cost: gas only, about $2 a visit. Time: 5 minutes a check, twice a week.`;
-    case 'curator':
-      return `Split a second $${small} into a different ${n} vault on ${chain} after the first month, so the wallet shows range rather than one lucky deposit. Cost: the $${small} plus gas. Time: 15 minutes.`;
-    case 'derivatives':
-      return `Close and reopen the hedge weekly so the wallet builds a trading history on ${n} across many snapshots, keeping each position under a fifth of the margin. Cost: trading fees near 0.05% a side. Time: 5 minutes a week.`;
-    case 'bridge':
-      return `Keep a small balance working on the far side: swap or supply $${small} there through ${n}'s app after each crossing instead of bridging straight back. Cost: about $1 of gas a session. Time: 10 minutes a week.`;
-    case 'staking':
-      return `Restake or vote the receipt token where ${n} supports it on ${chain}, and claim staking rewards on a fixed day each week. Cost: about $1 of gas a claim. Time: 5 minutes a week.`;
-    case 'rwa':
-      return `Add $${small} a month to the same ${n} position so the holding grows across snapshots rather than sitting at the minimum. Cost: the $${small} plus gas. Time: 10 minutes a month.`;
-    case 'launchpad':
-      return `Complete every pre-launch task ${n} publishes for the next sale — registration, whitelists, holds — from this wallet only. Cost: gas only, about $2 a task. Time: 10 minutes a task.`;
-    case 'prediction':
-      return `Roll settled winnings into the next position instead of withdrawing, keeping the ${n} balance active across at least three market cycles. Cost: nothing but the settled funds. Time: 10 minutes a cycle.`;
-    case 'yield':
-      return `Harvest and redeposit the vault's rewards monthly on ${chain}, so ${n} records compounding activity rather than a single deposit. Cost: about $1 of gas a harvest. Time: 5 minutes a month.`;
-    default:
-      return `Repeat the core action monthly with about $${small} more, so ${n} sees a returning user across several snapshots. Cost: the $${small} plus gas. Time: 10 minutes a month.`;
-  }
+  const variants: Record<Archetype, [string, string]> = {
+    lending: [
+      `Run one careful loop a week: borrow $${small} of a stablecoin against the supply, resupply it once, and unwind it the same day if rates spike. Cost: about $2 of gas a loop. Time: 10 minutes a week.`,
+      `Once a week, add a small borrow-and-resupply loop of $${small}, and unwind it the same day if borrowing rates jump. Cost: about $2 of gas a loop. Time: 10 minutes a week.`,
+    ],
+    dex: [
+      `Stake the LP position in ${n}'s own farm or gauge on ${chain} when it offers one, and claim rewards weekly rather than letting them idle. Cost: about $1 of gas a claim. Time: 5 minutes a week.`,
+      `If ${n} runs a farm or gauge for the pool on ${chain}, stake the LP there and claim on a weekly rhythm instead of letting rewards idle. Cost: about $1 of gas a claim. Time: 5 minutes a week.`,
+    ],
+    cdp: [
+      `Top the vault up by $${small} whenever its health factor drifts toward your limit, and repay a slice after large price moves. Cost: gas only, about $2 a visit. Time: 5 minutes a check, twice a week.`,
+      `Check the vault twice a week: add $${small} of collateral when the health factor thins, and repay a slice after sharp rallies. Cost: gas only, about $2 a visit. Time: 5 minutes a check, twice a week.`,
+    ],
+    curator: [
+      `Split a second $${small} into a different ${n} vault on ${chain} after the first month, so the wallet shows range rather than one lucky deposit. Cost: the $${small} plus gas. Time: 15 minutes.`,
+      `After the first month, open a second ${n} vault position of $${small} on ${chain} in a different strategy, so the record shows range rather than one lucky deposit. Cost: the $${small} plus gas. Time: 15 minutes.`,
+    ],
+    derivatives: [
+      `Close and reopen the hedge weekly so the wallet builds a trading history on ${n} across many snapshots, keeping each position under a fifth of the margin. Cost: trading fees near 0.05% a side. Time: 5 minutes a week.`,
+      `Rebuild the hedge each week at a slightly different size, keeping every position under a fifth of the margin so ${n} sees steady, ordinary flow. Cost: trading fees near 0.05% a side. Time: 5 minutes a week.`,
+    ],
+    bridge: [
+      `Keep a small balance working on the far side: swap or supply $${small} there through ${n}'s app after each crossing instead of bridging straight back. Cost: about $1 of gas a session. Time: 10 minutes a week.`,
+      `Leave working funds on the far side and use them there — a swap or a small supply of $${small} through ${n}'s app — before bridging back. Cost: about $1 of gas a session. Time: 10 minutes a week.`,
+    ],
+    staking: [
+      `Restake or vote the receipt token where ${n} supports it on ${chain}, and claim staking rewards on a fixed day each week. Cost: about $1 of gas a claim. Time: 5 minutes a week.`,
+      `Put the receipt token to work where ${n} supports it on ${chain} — restaking or governance — and claim rewards on the same weekday each week. Cost: about $1 of gas a claim. Time: 5 minutes a week.`,
+    ],
+    rwa: [
+      `Add $${small} a month to the same ${n} position so the holding grows across snapshots rather than sitting at the minimum. Cost: the $${small} plus gas. Time: 10 minutes a month.`,
+      `Grow the same ${n} holding by $${small} a month rather than opening new positions elsewhere. Cost: the $${small} plus gas. Time: 10 minutes a month.`,
+    ],
+    launchpad: [
+      `Complete every pre-launch task ${n} publishes for the next sale — registration, whitelists, holds — from this wallet only. Cost: gas only, about $2 a task. Time: 10 minutes a task.`,
+      `Work through ${n}'s published pre-launch list for the next sale — registration, whitelist, any hold requirement — from this wallet only. Cost: gas only, about $2 a task. Time: 10 minutes a task.`,
+    ],
+    prediction: [
+      `Roll settled winnings into the next position instead of withdrawing, keeping the ${n} balance active across at least three market cycles. Cost: nothing but the settled funds. Time: 10 minutes a cycle.`,
+      `Let settled positions roll: winnings fund the next ${n} market, so the balance stays live across at least three cycles. Cost: nothing but the settled funds. Time: 10 minutes a cycle.`,
+    ],
+    yield: [
+      `Harvest and redeposit the vault's rewards monthly on ${chain}, so ${n} records compounding activity rather than a single deposit. Cost: about $1 of gas a harvest. Time: 5 minutes a month.`,
+      `Each month, harvest ${n}'s rewards on ${chain} and redeposit them into the same vault, so the record shows compounding rather than a single deposit. Cost: about $1 of gas a harvest. Time: 5 minutes a month.`,
+    ],
+    generic: [
+      `Repeat the core action monthly with about $${small} more, so ${n} sees a returning user across several snapshots. Cost: the $${small} plus gas. Time: 10 minutes a month.`,
+      `Return monthly with about $${small} more, so ${n} records a repeat user across several snapshots rather than a single visit. Cost: the $${small} plus gas. Time: 10 minutes a month.`,
+    ],
+  };
+  return variants[kind][v]!;
+}
+
+/** A plan's totals, for the detail view's summary line: the capital the steps put to work, the
+ *  gas and fees they burn (a range, because gas moves), and the run's length in weeks. The
+ *  figures are summed from the same quantities the steps themselves state — the tier capital,
+ *  its quarter and half top-ups, the chains' gas — so the summary can never contradict the plan. */
+export interface PlanSummary {
+  capital_usd: number;
+  fees_lo: number;
+  fees_hi: number;
+  weeks: number;
+}
+
+/** One protocol's whole plan: its steps and their totals. */
+export interface FarmPlan {
+  steps: string[];
+  summary: PlanSummary;
 }
 
 /**
  * A protocol's farm plan: five or six steps, each with what it costs and how long it takes.
  * The plan is assembled from the protocol's own record — its category's mechanics, its real top
  * chains, a capital tier from its TVL — and seeded by its slug, so two protocols never receive
- * the same text and the same snapshot always produces the same plan.
+ * the same text and the same snapshot always produces the same plan. Every step slot carries
+ * two or more phrasings and the seed chooses among them, so plans in one category do not read
+ * as a single template with the names swapped.
  */
-export function farmSteps(p: SnapshotProtocol): string[] {
+export function farmPlan(p: SnapshotProtocol): FarmPlan {
   const rng = rngFrom(hashSlug(p.slug));
   const kind = archetypeOf(p);
   const capital = capitalFor(p, rng);
@@ -435,21 +552,34 @@ export function farmSteps(p: SnapshotProtocol): string[] {
   const second = chains.length > 1 ? chains[1]! : null;
   const gas = gasUsd(first);
   const weeks = intBetween(rng, 6, 12);
+  const small = Math.max(10, Math.round(capital / 4 / 5) * 5);
+  const half = Math.max(10, Math.round(capital / 2 / 5) * 5);
 
   const setups = [
     `Start with a fresh wallet funded only with the $${capital + 25} this ${p.name} plan needs, and keep its seed phrase offline. Cost: under $3 to fund. Time: 10 minutes, once.`,
     `Use one dedicated wallet for ${p.name} so its activity is readable on its own; fund it with the $${capital + 25} the plan uses. Cost: under $3 to fund. Time: 10 minutes, once.`,
     `Prepare a clean wallet (no dust from other farms) and move $${capital + 25} into it on ${first} for ${p.name}. Cost: about $${gas.toFixed(gas < 1 ? 2 : 0)} for the transfer. Time: 10 minutes, once.`,
+    `Open a fresh wallet for ${p.name} alone, fund it with the $${capital + 25} the plan needs on ${first}, and write the seed phrase down offline. Cost: under $3 to fund. Time: 10 minutes, once.`,
+    `Set up one wallet dedicated to ${p.name} and nothing else; move $${capital + 25} into it before you touch the app. Cost: under $3 to fund. Time: 10 minutes, once.`,
   ];
-  const steps: string[] = [pick(rng, setups), coreStep(p, kind, capital, first, gas), secondStep(p, kind, capital, first)];
+  const coreV = rng() < 0.5 ? 0 : 1;
+  const secondV = rng() < 0.5 ? 0 : 1;
+  const steps: string[] = [pick(rng, setups), coreStep(p, kind, capital, first, gas, coreV), secondStep(p, kind, capital, first, secondV)];
 
   if (second !== null) {
+    const weekIn = intBetween(rng, 2, 4);
     steps.push(
-      `Extend to ${second} in week ${intBetween(rng, 2, 4)}: bridge about $${Math.max(10, Math.round(capital / 2 / 5) * 5)} over and repeat the core action there, so ${p.name} records the wallet on two chains. Cost: bridge fee near 0.1% plus about $${gasUsd(second).toFixed(2)} of gas. Time: 20 minutes.`,
+      pick(rng, [
+        `Extend to ${second} in week ${weekIn}: bridge about $${half} over and repeat the core action there, so ${p.name} records the wallet on two chains. Cost: bridge fee near 0.1% plus about $${gasUsd(second).toFixed(2)} of gas. Time: 20 minutes.`,
+        `In week ${weekIn}, take the plan to ${second} as well: bridge about $${half} across and repeat the core action, so ${p.name} records the wallet on two chains. Cost: bridge fee near 0.1% plus about $${gasUsd(second).toFixed(2)} of gas. Time: 20 minutes.`,
+      ]),
     );
   } else {
     steps.push(
-      `Read ${p.name}'s governance forum and docs once a month and vote or comment where a wallet signature is enough; governance readers are the users a launch rewards first. Cost: nothing, or a signature's gas. Time: 15 minutes a month.`,
+      pick(rng, [
+        `Read ${p.name}'s governance forum and docs once a month and vote or comment where a wallet signature is enough; governance readers are the users a launch rewards first. Cost: nothing, or a signature's gas. Time: 15 minutes a month.`,
+        `Once a month, read ${p.name}'s docs and governance forum end to end and vote where a signature is enough; launches tend to reward the wallets that were paying attention. Cost: nothing, or a signature's gas. Time: 15 minutes a month.`,
+      ]),
     );
   }
 
@@ -459,14 +589,35 @@ export function farmSteps(p: SnapshotProtocol): string[] {
       pick(rng, [
         `Check ${p.name}'s official points or rewards page every week and complete any testnet or quest it opens from this wallet. Cost: never pay a third party to claim anything. Time: 5 minutes a week.`,
         `Watch ${p.name}'s own announcements for a points program; if one opens, register this wallet on the official page only. Cost: nothing to register. Time: 5 minutes a week of checking.`,
+        `Keep an eye on ${p.name}'s official channels for a points or rewards program; if one opens, enrol this wallet on the official page only and finish its starter tasks. Cost: nothing to enrol. Time: 5 minutes a week of checking.`,
       ]),
     );
   }
 
   steps.push(
-    `Hold the position for at least ${weeks} weeks so the activity spans several weekly snapshots, then review: keep, grow or unwind, and log every transaction with its date. Cost: the capital stays deployed until you unwind. Time: ${weeks} weeks, 5 minutes a week of checks.`,
+    pick(rng, [
+      `Hold the position for at least ${weeks} weeks so the activity spans several weekly snapshots, then review: keep, grow or unwind, and log every transaction with its date. Cost: the capital stays deployed until you unwind. Time: ${weeks} weeks, 5 minutes a week of checks.`,
+      `Stay in for at least ${weeks} weeks so the position appears in several weekly snapshots, checking in for 5 minutes a week; at the end, decide from the log — keep, grow or unwind. Cost: the capital stays deployed until you unwind. Time: ${weeks} weeks.`,
+      `Let the position run at least ${weeks} weeks, with a 5-minute check each week and every transaction logged with its date; then review the whole plan before adding or withdrawing anything. Cost: the capital stays deployed until you unwind. Time: ${weeks} weeks.`,
+    ]),
   );
-  return steps;
+
+  // The summary: capital is what the steps deploy (core, top-up, second chain); fees are what
+  // they burn — funding, the core action's gas, a dollar or two of weekly upkeep across the run,
+  // and the bridge crossing when the plan extends. Gas moves, so the fees are a range.
+  const fees = 3 + gas + 1.5 * weeks + (second !== null ? 0.001 * half + gasUsd(second) : 0);
+  const summary: PlanSummary = {
+    capital_usd: capital + small + (second !== null ? half : 0),
+    fees_lo: Math.max(2, Math.round(fees * 0.75)),
+    fees_hi: Math.round(fees * 1.3) + 1,
+    weeks,
+  };
+  return { steps, summary };
+}
+
+/** A protocol's farm plan steps, without their totals. */
+export function farmSteps(p: SnapshotProtocol): string[] {
+  return farmPlan(p).steps;
 }
 
 // ---------------------------------------------------------------------------
@@ -497,7 +648,8 @@ export interface BoardRow {
   farm_steps: string[];
 }
 
-/** The dashboard's view of one row: the board row's fields, flat, plus its farm plan. */
+/** The dashboard's view of one row: the board row's fields, flat, plus its farm plan, the
+ *  confidence its comparable set earns, and its plan's totals. */
 export interface RadarRow extends Omit<BoardRow, 'model'> {
   ratio: number;
   ratio_basis: CategoryRatio['basis'];
@@ -505,6 +657,8 @@ export interface RadarRow extends Omit<BoardRow, 'model'> {
   momentum_factor: number;
   age_factor: number;
   chain_factor: number;
+  confidence: CompConfidence;
+  plan: PlanSummary;
 }
 
 /** A protocol that already trades: shown apart from the board, at the market's own value. */
@@ -534,6 +688,7 @@ export interface RadarData {
   ratios: {
     global: number;
     global_comps: number;
+    global_names: string[];
     categories: CategoryRatio[];
   };
   rows: RadarRow[];
@@ -598,6 +753,7 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
   const board = buildBoard(snapshot);
   const table = buildRatios(snapshot.protocols);
   const preToken = snapshot.protocols.filter(isPreToken).length;
+  const bySlug = new Map(snapshot.protocols.map((p) => [p.slug, p]));
   const radar: RadarData = {
     as_of: snapshot.as_of,
     source: snapshot.source,
@@ -611,7 +767,7 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
       board_rows: board.length,
       set_aside: preToken - board.length,
     },
-    ratios: { global: table.global, global_comps: table.global_comps, categories: table.categories },
+    ratios: { global: table.global, global_comps: table.global_comps, global_names: table.global_names, categories: table.categories },
     rows: board.map((r) => ({
       rank: r.rank,
       slug: r.slug,
@@ -630,6 +786,8 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
       momentum_factor: r.model.momentum_factor,
       age_factor: r.model.age_factor,
       chain_factor: r.model.chain_factor,
+      confidence: confidenceFor(r.model.ratio_basis, r.model.ratio_comps),
+      plan: farmPlan(bySlug.get(r.slug)!).summary,
       farm_steps: r.farm_steps,
     })),
     live: liveRows(snapshot),
