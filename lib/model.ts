@@ -18,7 +18,9 @@
 // Transparency is part of the model, not a garnish: every category ratio carries the names of
 // its largest comparables, every row carries a plain-language confidence grade for the set its
 // ratio rests on, and every farm plan carries its own totals — the capital its steps deploy,
-// the fees they burn, the weeks they run — summed from the same figures the steps state.
+// the fees they burn, the weeks they run — summed from the same figures the steps state, plus
+// an effort grade read off those same totals, so a reader can tell a Sunday-afternoon farm
+// from a second job at a glance.
 
 /** The snapshot's protocol entry: exactly the ten fields the sealed input carries. */
 export interface SnapshotProtocol {
@@ -52,7 +54,7 @@ export class SnapshotError extends Error {
 }
 
 /** The model's version label: the dashboard names it, the board carries it. */
-export const MODEL_VERSION = 'radar-3';
+export const MODEL_VERSION = 'radar-4';
 
 /** Below this TVL a pre-token protocol is too small for the board to rank. */
 export const BOARD_FLOOR_USD = 5_000_000;
@@ -518,15 +520,35 @@ function secondStep(p: SnapshotProtocol, kind: Archetype, capital: number, chain
   return variants[kind][v]!;
 }
 
+/** How much work a plan asks of its farmer, in plain language for the detail view. Read off
+ *  the plan's own figures — its step count, the capital it deploys, the fees it burns and the
+ *  weeks it runs — never off the protocol's name or rank. */
+export type PlanEffort = 'light' | 'moderate' | 'intensive';
+
+/** A plan's effort grade, scored from its own numbers alone: two points each for a long run,
+ *  a large deployment and heavy fees, one for a sixth step, with the middle of each scale
+ *  earning one. Five points or more is a second job; three or four is a steady weekly habit;
+ *  anything less is a light-touch farm. */
+export function effortFor(summary: Omit<PlanSummary, 'effort'>, stepCount: number): PlanEffort {
+  let points = 0;
+  points += summary.weeks >= 10 ? 2 : summary.weeks >= 8 ? 1 : 0;
+  points += summary.capital_usd >= 500 ? 2 : summary.capital_usd >= 250 ? 1 : 0;
+  points += summary.fees_hi >= 36 ? 2 : summary.fees_hi >= 27 ? 1 : 0;
+  points += stepCount >= 6 ? 1 : 0;
+  return points >= 5 ? 'intensive' : points >= 3 ? 'moderate' : 'light';
+}
+
 /** A plan's totals, for the detail view's summary line: the capital the steps put to work, the
- *  gas and fees they burn (a range, because gas moves), and the run's length in weeks. The
- *  figures are summed from the same quantities the steps themselves state — the tier capital,
- *  its quarter and half top-ups, the chains' gas — so the summary can never contradict the plan. */
+ *  gas and fees they burn (a range, because gas moves), the run's length in weeks, and the
+ *  effort those figures add up to. The figures are summed from the same quantities the steps
+ *  themselves state — the tier capital, its quarter and half top-ups, the chains' gas — so
+ *  the summary can never contradict the plan. */
 export interface PlanSummary {
   capital_usd: number;
   fees_lo: number;
   fees_hi: number;
   weeks: number;
+  effort: PlanEffort;
 }
 
 /** One protocol's whole plan: its steps and their totals. */
@@ -606,12 +628,13 @@ export function farmPlan(p: SnapshotProtocol): FarmPlan {
   // they burn — funding, the core action's gas, a dollar or two of weekly upkeep across the run,
   // and the bridge crossing when the plan extends. Gas moves, so the fees are a range.
   const fees = 3 + gas + 1.5 * weeks + (second !== null ? 0.001 * half + gasUsd(second) : 0);
-  const summary: PlanSummary = {
+  const totals = {
     capital_usd: capital + small + (second !== null ? half : 0),
     fees_lo: Math.max(2, Math.round(fees * 0.75)),
     fees_hi: Math.round(fees * 1.3) + 1,
     weeks,
   };
+  const summary: PlanSummary = { ...totals, effort: effortFor(totals, steps.length) };
   return { steps, summary };
 }
 
