@@ -147,21 +147,21 @@ h1 {
 .strip-stats div { display: flex; align-items: baseline; gap: 8px; }
 .strip-stats dt { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-family: var(--mono); }
 .strip-stats dd { margin: 0; font-family: var(--mono); font-size: 15.5px; color: var(--txt); }
-.movers { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 12px; }
+.movers { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .mcard {
-  display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; min-width: 0;
   padding: 10px 12px; border-radius: 10px; color: var(--txt);
   background: var(--ink-2); border: 1px solid var(--line-soft); font: inherit;
   transition: border-color .15s ease, background .15s ease;
 }
 .mcard:hover { border-color: var(--phos-dim); background: rgba(67,255,163,.05); }
 .mcard:focus-visible { outline: 2px solid var(--phos-dim); outline-offset: 2px; }
-.mcard .rk { width: 27px; height: 27px; font-size: 12px; flex: 0 0 auto; }
+.mcard .rk { width: 25px; height: 25px; font-size: 11.5px; flex: 0 0 auto; }
 .m-main { flex: 1 1 auto; min-width: 0; }
 .m-name { display: block; font-weight: 600; font-size: 13.5px; color: #eef7f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.m-sub { display: block; font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.m-pct { font-family: var(--mono); font-size: 15px; flex: 0 0 auto; }
-@media (max-width: 1080px) { .movers { grid-template-columns: repeat(3, 1fr); } }
+.m-sub { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-pct { font-family: var(--mono); font-size: 14.5px; flex: 0 0 auto; }
+@media (max-width: 1080px) { .movers { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .movers { grid-template-columns: 1fr; } .strip-stats { margin-left: 0; } }
 
 /* ---------- the board ---------- */

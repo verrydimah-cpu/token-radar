@@ -40,6 +40,11 @@
     if (r.ratio_basis === 'shrunk') return esc(r.category) + ' has ' + r.ratio_comps + ' traded comparable' + (r.ratio_comps === 1 ? '' : 's') + ' — its median shrunk toward the global ' + R.ratios.global.toFixed(3);
     return 'no traded comparable in its category — the global median of ' + R.ratios.global_comps + ' traded protocols';
   }
+  function basisShort(r) {
+    if (r.ratio_basis === 'category') return r.ratio_comps + ' traded comparables · category median';
+    if (r.ratio_basis === 'shrunk') return r.ratio_comps + ' traded comparable' + (r.ratio_comps === 1 ? '' : 's') + ' · shrunk toward global';
+    return 'global median · ' + R.ratios.global_comps + ' traded protocols';
+  }
   function catRow(r) {
     for (var i = 0; i < R.ratios.categories.length; i++) {
       if (R.ratios.categories[i].category === r.category) return R.ratios.categories[i];
@@ -247,7 +252,7 @@
       '<dl class="stat-grid">' +
       '<div class="stat"><dt>Implied value</dt><dd>' + fmtUsd(r.implied_value_usd) + '<small>' + fmtFull(r.implied_value_usd) + '</small></dd></div>' +
       '<div class="stat"><dt>TVL</dt><dd>' + fmtUsd(r.tvl_usd) + '<small>' + fmtFull(r.tvl_usd) + '</small></dd></div>' +
-      '<div class="stat"><dt>Category ratio</dt><dd>' + r.ratio.toFixed(3) + '×<small>' + basisText(r) + '</small></dd></div>' +
+      '<div class="stat"><dt>Category ratio</dt><dd>' + r.ratio.toFixed(3) + '×<small>' + basisShort(r) + '</small></dd></div>' +
       '<div class="stat"><dt>TVL change · 7d</dt><dd>' + fmtPct(r.change_7d) + '<small>momentum factor ×' + r.momentum_factor.toFixed(3) + '</small></dd></div>' +
       '<div class="stat"><dt>Tokenless age</dt><dd>' + (r.age_years === null ? 'n/a' : r.age_years.toFixed(2) + 'y') + '<small>age factor ×' + r.age_factor.toFixed(3) + '</small></dd></div>' +
       '<div class="stat"><dt>Chains</dt><dd>' + r.chains.length + '<small>breadth factor ×' + r.chain_factor.toFixed(3) + '</small></dd></div>' +
